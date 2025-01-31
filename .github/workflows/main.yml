@@ -30,7 +30,7 @@ jobs:
         pyinstaller --onefile --name server_setup_linux main.py
         mv dist/server_setup_linux dist/server_setup_linux_v1.0.0
         
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v4
       with:
         name: linux-executable
         path: dist/server_setup_linux_v1.0.0
@@ -54,7 +54,7 @@ jobs:
         pyinstaller --onefile --name server_setup_macos main.py
         mv dist/server_setup_macos dist/server_setup_macos_v1.0.0
         
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v4
       with:
         name: macos-executable
         path: dist/server_setup_macos_v1.0.0
@@ -78,7 +78,7 @@ jobs:
         pyinstaller --onefile --noconsole --name server_setup_windows main.py
         Move-Item dist\server_setup_windows.exe dist\server_setup_windows_v1.0.0.exe
         
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v4
       with:
         name: windows-executable
         path: dist\server_setup_windows_v1.0.0.exe
@@ -88,10 +88,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Download all artifacts
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         path: artifacts
-    
+        
     - name: Create Release
       id: create_release
       uses: actions/create-release@v1
@@ -102,7 +102,7 @@ jobs:
         release_name: Release v1.0.0
         draft: false
         prerelease: false
-    
+        
     - name: Upload Linux Asset
       uses: actions/upload-release-asset@v1
       env:
@@ -112,7 +112,7 @@ jobs:
         asset_path: ./artifacts/linux-executable
         asset_name: server_setup_linux_v1.0.0
         asset_content_type: application/octet-stream
-    
+        
     - name: Upload macOS Asset
       uses: actions/upload-release-asset@v1
       env:
@@ -122,7 +122,7 @@ jobs:
         asset_path: ./artifacts/macos-executable
         asset_name: server_setup_macos_v1.0.0
         asset_content_type: application/octet-stream
-    
+        
     - name: Upload Windows Asset
       uses: actions/upload-release-asset@v1
       env:
