@@ -2,83 +2,133 @@ name: Build and Release
 
 on:
   push:
-    tags:
-      - "v*"  # Trigger on tags like v1.0.0, v2.0.1, etc.
+    branches: [ "main" ]
+  workflow_dispatch:
 
 jobs:
-  build_release:
-    name: Build executables for multiple OS
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        include:
-          - os: ubuntu-latest
-            artifact_name: "server_setup_linux"
-          - os: windows-latest
-            artifact_name: "server_setup_windows"
-          - os: macos-latest
-            artifact_name: "server_setup_macos"
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v3
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.9"
-
-      - name: Install dependencies
-        run: |
-          pip install --upgrade pip
-          pip install pyinstaller
-          # If you have other requirements, install them here
-          # pip install -r requirements.txt
-
-      - name: Build executable
-        run: |
-          pyinstaller main.py --onefile --name ${{ matrix.artifact_name }}
-
-      - name: Rename artifact
-        run: |
-          # Rename the built file to include the version from the tag (e.g., v1.1.0).
-          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            mv dist\\${{ matrix.artifact_name }}.exe dist\\${{ matrix.artifact_name }}_${{ github.ref_name }}.exe
-          else
-            mv dist/${{ matrix.artifact_name }} dist/${{ matrix.artifact_name }}_${{ github.ref_name }}
-          fi
-        shell: bash
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v3
-        with:
-          name: ${{ matrix.artifact_name }}_${{ github.ref_name }}
-          path: |
-            dist/${{ matrix.artifact_name }}_${{ github.ref_name }}*
-
-  create_release:
-    name: Create Release
-    needs: [build_release]
+  build-linux:
     runs-on: ubuntu-latest
     steps:
-      - name: Download build artifacts
-        uses: actions/download-artifact@v3
-        with:
-          path: artifacts
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+        
+    - name: Install Linux dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y python3-tk
+        
+    - name: Install Python dependencies
+      run: |
+        pip install pyinstaller pyftpdlib
+        
+    - name: Build Linux executable
+      run: |
+        pyinstaller --onefile --name server_setup_linux main.py
+        mv dist/server_setup_linux dist/server_setup_linux_v1.0.0
+        
+    - uses: actions/upload-artifact@v3
+      with:
+        name: linux-executable
+        path: dist/server_setup_linux_v1.0.0
 
-      - name: Create GitHub Release
-        id: create_release
-        uses: ncipollo/release-action@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ github.ref_name }}  # The tag that triggered the workflow (e.g. v1.1.0)
-          name: Release ${{ github.ref_name }}
-          body: "Automated build for ${{ github.ref_name }}"
-          artifacts: |
-            server_setup_linux_${{ github.ref_name }}
-            server_setup_windows_${{ github.ref_name }}
-            server_setup_macos_${{ github.ref_name }}
-          draft: false
-          prerelease: false
+  build-macos:
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+        
+    - name: Install Python dependencies
+      run: |
+        pip install pyinstaller pyftpdlib
+        
+    - name: Build macOS executable
+      run: |
+        pyinstaller --onefile --name server_setup_macos main.py
+        mv dist/server_setup_macos dist/server_setup_macos_v1.0.0
+        
+    - uses: actions/upload-artifact@v3
+      with:
+        name: macos-executable
+        path: dist/server_setup_macos_v1.0.0
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+        
+    - name: Install Python dependencies
+      run: |
+        pip install pyinstaller pyftpdlib
+        
+    - name: Build Windows executable
+      run: |
+        pyinstaller --onefile --noconsole --name server_setup_windows main.py
+        Move-Item dist\server_setup_windows.exe dist\server_setup_windows_v1.0.0.exe
+        
+    - uses: actions/upload-artifact@v3
+      with:
+        name: windows-executable
+        path: dist\server_setup_windows_v1.0.0.exe
+
+  create-release:
+    needs: [build-linux, build-macos, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v3
+      with:
+        path: artifacts
+    
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: v1.0.0
+        release_name: Release v1.0.0
+        draft: false
+        prerelease: false
+    
+    - name: Upload Linux Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./artifacts/linux-executable
+        asset_name: server_setup_linux_v1.0.0
+        asset_content_type: application/octet-stream
+    
+    - name: Upload macOS Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./artifacts/macos-executable
+        asset_name: server_setup_macos_v1.0.0
+        asset_content_type: application/octet-stream
+    
+    - name: Upload Windows Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./artifacts/windows-executable
+        asset_name: server_setup_windows_v1.0.0.exe
+        asset_content_type: application/octet-stream
