@@ -1,0 +1,91 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - "v*"       # Triggers on version tags like v1.0.0, v2.0.1, etc.
+
+jobs:
+  build_release:
+    name: Build executables for multiple OS
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            artifact_name: "server_setup_linux"
+          - os: windows-latest
+            artifact_name: "server_setup_windows"
+          - os: macos-latest
+            artifact_name: "server_setup_macos"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: "3.9"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install pyinstaller
+          # If you have other requirements, install them here
+          # pip install -r requirements.txt
+
+      - name: Build executable
+        run: |
+          pyinstaller main.py --onefile --name ${{ matrix.artifact_name }}
+
+      - name: Rename and upload artifact
+        run: |
+          # Rename the built file to include the version from the tag (e.g. v1.1.0)
+          # For Linux/Mac, the executable won't have an extension. For Windows, it's .exe.
+          # We'll handle that conditionally.
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            mv dist\\${{ matrix.artifact_name }}.exe dist\\${{ matrix.artifact_name }}_${{ github.ref_name }}.exe
+          else
+            mv dist/${{ matrix.artifact_name }} dist/${{ matrix.artifact_name }}_${{ github.ref_name }}
+          fi
+        shell: bash
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{ matrix.artifact_name }}_${{ github.ref_name }}
+          path: |
+            dist/${{ matrix.artifact_name }}_${{ github.ref_name }}*
+          # This will upload the .exe on Windows and the binary on Linux/Mac
+
+  create_release:
+    name: Create Release
+    needs: [build_release]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v2
+        with:
+          path: artifacts
+
+      - name: Create GitHub Release
+        id: create_release
+        uses: ncipollo/release-action@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          # The tag that triggered this workflow, e.g. 'v1.1.0'
+          tag: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          body: "Automated build for ${{ github.ref_name }}"
+          # We specify the same artifact names we used above
+          artifacts: |
+            server_setup_linux_${{ github.ref_name }}
+            server_setup_windows_${{ github.ref_name }}
+            server_setup_macos_${{ github.ref_name }}
+          # Optionally, remove artifacts after attaching them
+          # removeArtifacts: true
+          draft: false
+          prerelease: false
